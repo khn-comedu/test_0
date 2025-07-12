@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>방탈출: 공포의 실험실</title>
+
+    <!-- 모든 CSS 코드가 여기에 포함됩니다 -->
+    <style>
+        :root {
+            --main-color: #00ff7f; /* 형광 녹색 */
+            --bg-color: #1a1a1a;
+            --font-color: #eee;
+        }
+        body, html {
+            margin: 0; padding: 0;
+            background-color: #000;
+            font-family: 'Inconsolata', 'Courier New', monospace;
+            color: var(--font-color);
+            overflow: hidden;
+        }
+        .screen {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            text-align: center;
+        }
+        .popup {
+            background-color: var(--bg-color);
+            border: 2px solid var(--main-color);
+            padding: 2rem;
+            width: 90%; max-width: 400px;
+            box-shadow: 0 0 25px rgba(0, 255, 127, 0.5);
+        }
+        .popup h2 { color: #ff4d4d; margin-top: 0; }
+        .popup input {
+            display: block; width: calc(100% - 22px);
+            margin: 10px auto; padding: 10px;
+            background-color: #333; border: 1px solid var(--main-color);
+            color: var(--font-color); text-align: center; font-size: 1em;
+        }
+        .popup button {
+            width: 100%; padding: 12px; margin-top: 15px;
+            background-color: var(--main-color); border: none;
+            color: #000; font-weight: bold; cursor: pointer; font-size: 1.1em;
+        }
+        #game-container {
+            position: relative; width: 100%; max-width: 1024px; margin: auto;
+        }
+        #game-container > img { width: 100%; display: block; }
+        .clickable-object {
+            position: absolute; cursor: pointer;
+            border: 2px solid transparent;
+            transition: border-color 0.3s;
+        }
+        .clickable-object:hover { border-color: var(--main-color); }
+        #modal-container { background-color: rgba(0,0,0,0.85); z-index: 100; }
+        #close-modal-btn {
+            position: absolute; top: 10px; right: 15px;
+            background: none; border: none; color: var(--main-color);
+            font-size: 28px; cursor: pointer;
+        }
+        .puzzle-item h3 { color: #ff4d4d; }
+        .puzzle-item p { line-height: 1.6; }
+        .highlight { color: #ff4d4d; font-weight: bold; }
+        #number-click-game { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 20px auto; max-width: 200px; }
+        .number-btn {
+            padding: 20px; font-size: 1.5em; background-color: #333;
+            border: 2px solid var(--main-color); color: white; cursor: pointer;
+        }
+        .number-btn.correct { background-color: #27ae60; }
+        .number-btn.wrong { background-color: #c0392b; }
+        #inventory {
+            position: fixed; bottom: 0; left: 0; width: 100%;
+            background-color: rgba(26, 26, 26, 0.9);
+            border-top: 2px solid var(--main-color); padding: 10px;
+            box-sizing: border-box; text-align: center; z-index: 50;
+        }
+        #inventory h3 { margin: 0 0 10px; font-size: 1em; }
+        #inventory ul { list-style: none; padding: 0; margin: 0; display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; }
+        #inventory li { background-color: #333; padding: 5px 10px; border-radius: 3px; }
+        #success-screen { background-color: #000; z-index: 200; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <!-- 화면 1: 시작 화면 -->
+    <div id="start-screen" class="screen">
+        <div class="popup">
+            <h2>실험 기록 시작</h2>
+            <p>관찰자의 정보를 입력하십시오.</p>
+            <input type="text" id="player-grade" placeholder="학년">
+            <input type="text" id="player-class" placeholder="반">
+            <input type="text" id="player-name" placeholder="이름">
+            <button id="start-button">기록 및 실험실 진입</button>
+        </div>
+    </div>
+
+    <!-- 화면 2: 메인 게임 화면 -->
+    <div id="game-container" class="hidden">
+        <img src="https://i.ibb.co/PzTYhsT7/Whisk-storyboard61dd9746005f4a97a48e606f.jpg" alt="공포의 실험실">
+        <!-- 클릭 오브젝트들 -->
+        <div class="clickable-object" data-puzzle="puzzle-monitor" style="top:29%; left:10.5%; width:12%; height:16%;"></div>
+        <div class="clickable-object" data-puzzle="puzzle-speaker" style="top:12%; left:3.5%; width:6%; height:10%;"></div>
+        <div class="clickable-object" data-puzzle="puzzle-clock" style="top:13%; left:86%; width:8%; height:15%;"></div>
+        <div class="clickable-object" data-puzzle="puzzle-beaker" style="top:68%; left:45%; width:6%; height:11%;"></div>
+        <div class="clickable-object" data-puzzle="puzzle-door" style="top:20%; left:45%; width:14%; height:48%;"></div>
+    </div>
+
+    <!-- 화면 3: 문제 팝업창 (모달) -->
+    <div id="modal-container" class="screen hidden">
+        <div class="popup">
+            <button id="close-modal-btn">X</button>
+            
+            <div id="puzzle-monitor" class="puzzle-item hidden">
+                <h3>[보안 로그]</h3><p>화면에 에러 메시지가 떠 있다.<br>"System ID: <span class="highlight">ALPHA</span>"</p>
+                <button class="hint-btn" data-id="puzzle-monitor" data-hint="ID: ALPHA">로그를 기록한다</button>
+            </div>
+
+            <div id="puzzle-speaker" class="puzzle-item hidden">
+                <h3>[오래된 녹음기]</h3><p>버튼을 누르자 끔찍한 비명과 함께<br>낮은 목소리가 들린다.<br>"비밀번호는... <span class="highlight">네자리</span> 숫자다..."</p>
+                <button class="hint-btn" data-id="puzzle-speaker" data-hint="PW: 4자리 숫자">녹음을 중단한다</button>
+            </div>
+            
+            <div id="puzzle-clock" class="puzzle-item hidden">
+                <h3>[부서진 시계]</h3><p>시계의 숫자판을 눌러<br>긴급 전력을 공급해야 한다.<br>지시서: "<span class="highlight">가장 큰 수</span>부터 순서대로 눌러라"</p>
+                <div id="number-click-game"></div>
+                <p id="clock-message"></p>
+            </div>
+            
+            <div id="puzzle-beaker" class="puzzle-item hidden">
+                <h3>[수상한 용액]</h3><p>용액을 분석했더니 특정 성분이 검출되었다.<br>화학식 H₂O는 무엇을 의미하는가?</p>
+                <input type="text" id="answer-beaker" placeholder="한글로 입력">
+                <button class="submit-btn" data-id="puzzle-beaker" data-input="answer-beaker" data-answer="물" data-hint="CODE: 물(H₂O)">분석 완료</button>
+            </div>
+
+            <div id="puzzle-door" class="puzzle-item hidden">
+                <h3>[중앙 통제 장치]</h3><p>모든 단서를 조합하여 시스템을 비활성화 하라.</p>
+                <input type="text" id="final-password" placeholder="최종 비활성화 코드 입력">
+                <button id="final-submit-btn">시스템 종료</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 화면 4: 하단 힌트 보관함 -->
+    <div id="inventory" class="hidden">
+        <h3>[획득한 단서]</h3><ul id="hint-list"></ul>
+    </div>
+
+    <!-- 화면 5: 성공 화면 -->
+    <div id="success-screen" class="screen hidden">
+        <div class="popup">
+            <h2>탈출 성공!</h2>
+            <p>관찰자: <span id="player-info-final"></span></p>
+            <p>총 소요 시간: <span id="play-time"></span></p>
+        </div>
+    </div>
+
+    <!-- 모든 JavaScript 코드가 여기에 포함됩니다 -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // 1. 모든 HTML 요소들을 변수에 담기
+            const elements = {
+                screens: {
+                    start: document.getElementById('start-screen'),
+                    game: document.getElementById('game-container'),
+                    modal: document.getElementById('modal-container'),
+                    success: document.getElementById('success-screen'),
+                },
+                buttons: {
+                    start: document.getElementById('start-button'),
+                    closeModal: document.getElementById('close-modal-btn'),
+                    finalSubmit: document.getElementById('final-submit-btn'),
+                    hintBtns: document.querySelectorAll('.hint-btn'),
+                    submitBtns: document.querySelectorAll('.submit-btn'),
+                },
+                inventory: document.getElementById('inventory'),
+                hintList: document.getElementById('hint-list'),
+                numberClickGame: document.getElementById('number-click-game'),
+            };
+
+            // 2. 게임 상태를 관리하는 변수들
+            const gameState = {
+                player: {},
+                startTime: null,
+                collectedHints: {},
+                FINAL_ANSWER: "2025",
+                clockGame: {
+                    numbers: [8, 2, 5, 9], // 시계 게임에 사용될 숫자들
+                    nextClick: 9, // 가장 큰 수부터 시작
+                }
+            };
+
+            // 3. 모든 클릭 이벤트와 핵심 기능들을 함수로 정의
+            
+            // 게임 시작 기능
+            function startGame() {
+                const name = document.getElementById('player-name').value;
+                if (!name) { alert("이름을 입력해야 시작할 수 있습니다."); return; }
+                gameState.player = {
+                    grade: document.getElementById('player-grade').value || '미입력',
+                    p_class: document.getElementById('player-class').value || '미입력',
+                    name: name,
+                };
+                gameState.startTime = new Date();
+                elements.screens.start.classList.add('hidden');
+                elements.screens.game.classList.remove('hidden');
+                elements.inventory.classList.remove('hidden');
+            }
+
+            // 팝업(모달) 열기 기능
+            function showPuzzle(puzzleId) {
+                if (gameState.collectedHints[puzzleId]) {
+                    alert("이미 확인한 장소다."); return;
+                }
+                elements.screens.modal.classList.remove('hidden');
+                document.querySelectorAll('.puzzle-item').forEach(p => p.classList.add('hidden'));
+                document.getElementById(puzzleId).classList.remove('hidden');
+                if (puzzleId === 'puzzle-clock') startClockGame();
+            }
+
+            // 팝업 닫기 기능
+            function closePuzzle() {
+                elements.screens.modal.classList.add('hidden');
+            }
+            
+            // 힌트 추가 및 인벤토리 업데이트 기능
+            function addHint(id, text) {
+                if (!gameState.collectedHints[id]) {
+                    gameState.collectedHints[id] = text;
+                    const li = document.createElement('li');
+                    li.textContent = text;
+                    elements.hintList.appendChild(li);
+                }
+            }
+
+            // 시계 미니게임 기능
+            function startClockGame() {
+                const sortedNumbers = [...gameState.clockGame.numbers].sort((a, b) => b - a);
+                let clickIndex = 0;
+                
+                document.getElementById('clock-message').textContent = '';
+                elements.numberClickGame.innerHTML = '';
+                
+                const shuffledNumbers = [...gameState.clockGame.numbers].sort(() => Math.random() - 0.5);
+                shuffledNumbers.forEach(num => {
+                    const btn = document.createElement('button');
+                    btn.classList.add('number-btn');
+                    btn.textContent = num;
+                    btn.addEventListener('click', () => {
+                        if (num === sortedNumbers[clickIndex]) {
+                            btn.classList.add('correct');
+                            btn.disabled = true;
+                            clickIndex++;
+                            if (clickIndex === sortedNumbers.length) {
+                                document.getElementById('clock-message').textContent = '성공! 숫자 [2,0,2,5]를 얻었다.';
+                                addHint('puzzle-clock', '숫자: 2025');
+                                setTimeout(closePuzzle, 1500);
+                            }
+                        } else {
+                            btn.classList.add('wrong');
+                            setTimeout(() => btn.classList.remove('wrong'), 500);
+                        }
+                    });
+                    elements.numberClickGame.appendChild(btn);
+                });
+            }
+
+            // 최종 탈출 기능
+            function attemptEscape() {
+                const finalPassword = document.getElementById('final-password').value;
+                if (finalPassword === gameState.FINAL_ANSWER) {
+                    const timeDiff = Math.round((new Date() - gameState.startTime) / 1000);
+                    const minutes = Math.floor(timeDiff / 60);
+                    const seconds = timeDiff % 60;
+                    
+                    document.getElementById('player-info-final').textContent = `${gameState.player.grade}학년 ${gameState.player.p_class}반 ${gameState.player.name}`;
+                    document.getElementById('play-time').textContent = `${minutes}분 ${seconds}초`;
+                    
+                    elements.screens.game.classList.add('hidden');
+                    elements.inventory.classList.add('hidden');
+                    closePuzzle();
+                    elements.screens.success.classList.remove('hidden');
+                } else {
+                    alert("코드가 맞지 않는다!");
+                }
+            }
+
+            // 4. 모든 버튼과 오브젝트에 위에서 만든 기능들을 연결
+            elements.buttons.start.addEventListener('click', startGame);
+            elements.buttons.closeModal.addEventListener('click', closePuzzle);
+            elements.buttons.finalSubmit.addEventListener('click', attemptEscape);
+            
+            document.querySelectorAll('.clickable-object').forEach(obj => {
+                obj.addEventListener('click', e => showPuzzle(e.currentTarget.dataset.puzzle));
+            });
+
+            elements.buttons.hintBtns.forEach(btn => {
+                btn.addEventListener('click', e => {
+                    addHint(e.currentTarget.dataset.id, e.currentTarget.dataset.hint);
+                    closePuzzle();
+                });
+            });
+
+            elements.buttons.submitBtns.forEach(btn => {
+                btn.addEventListener('click', e => {
+                    const id = e.currentTarget.dataset.id;
+                    const inputId = e.currentTarget.dataset.input;
+                    const answer = e.currentTarget.dataset.answer;
+                    const hint = e.currentTarget.dataset.hint;
+                    const userAnswer = document.getElementById(inputId).value.trim();
+
+                    if (userAnswer.toLowerCase() === answer.toLowerCase()) {
+                        alert("정답이다. 단서를 기록했다.");
+                        addHint(id, hint);
+                        closePuzzle();
+                    } else {
+                        alert("...아무래도 아닌 것 같다.");
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>```
