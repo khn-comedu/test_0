@@ -3,338 +3,498 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Project: ECHO</title>
+    <title>동물 구출 대작전!</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Nanum+Gothic+Coding&display=swap');
-        body { margin: 0; background-color: #000; font-family: 'Nanum Gothic Coding', monospace; overflow: hidden; cursor: none; }
-        #game-container { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
-        canvas { display: block; }
-        #crosshair {
-            position: fixed; top: 50%; left: 50%; width: 4px; height: 4px;
-            background: white; border-radius: 50%; transform: translate(-50%, -50%);
-            mix-blend-mode: difference; z-index: 10;
+        /* --- 기본 설정 및 폰트 --- */
+        @import url('https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@700&family=Gowun+Dodum&display=swap');
+
+        body {
+            font-family: 'Gowun Dodum', sans-serif;
+            background-color: #2c3e50;
+            color: #fff;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
         }
-        #hud {
-            position: fixed; bottom: 20px; left: 20px; color: #fff;
-            background: rgba(0,0,0,0.5); padding: 15px; border-radius: 5px; z-index: 10;
+
+        /* --- 화면 전환 컨테이너 --- */
+        .screen {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
         }
-        #stamina-bar { width: 250px; height: 25px; background: #555; border: 1px solid #888; }
-        #stamina-fill { width: 100%; height: 100%; background: #2ecc71; transition: width 0.2s; }
-        #objective-text { margin-top: 10px; font-size: 1.5em; }
-        .overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95); color: white; display: flex; flex-direction: column;
-            justify-content: center; align-items: center; text-align: center; z-index: 20; cursor: default;
+        #game-screen, #victory-screen {
+            display: none; /* 기본적으로 게임 화면과 승리 화면은 숨김 */
         }
-        .overlay h1 { font-family: 'Orbitron', sans-serif; font-size: 4em; }
-        #jumpscare-screen { display: none; background-size: cover; background-position: center; }
-        #jumpscare-image { width: 100%; height: 100%; object-fit: cover; }
+
+        /* --- 로그인 화면 --- */
+        #login-screen {
+            background: #34495e;
+        }
+        .login-box {
+            background: #ecf0f1;
+            color: #2c3e50;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+        .login-box h1 {
+            font-family: 'Nanum Myeongjo', serif;
+            margin-top: 0;
+        }
+        .login-box input {
+            display: block;
+            width: 250px;
+            padding: 10px;
+            margin: 10px auto;
+            font-size: 1em;
+            border-radius: 5px;
+            border: 1px solid #bdc3c7;
+        }
+        #start-button {
+            background: #27ae60;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.2em;
+            cursor: pointer;
+            margin-top: 15px;
+            transition: background 0.3s;
+        }
+        #start-button:hover {
+            background: #2ecc71;
+        }
+
+        /* --- 메인 게임 컨테이너 --- */
+        .game-container {
+            width: 1000px;
+            height: 650px;
+            border: 10px solid #3a2a1d;
+            box-shadow: 0 0 30px rgba(0,0,0,0.7);
+            position: relative;
+            background-size: cover;
+            background-position: center;
+            transition: background-image 1s ease-in-out;
+        }
+
+        /* --- 단서 요소 --- */
+        .clue {
+            position: absolute;
+            cursor: pointer;
+            border: 3px dashed rgba(255, 255, 0, 0.8);
+            transition: all 0.3s ease;
+            padding: 15px;
+            background-color: rgba(0,0,0,0.6);
+            border-radius: 50%; /* 원형 단서 */
+            width: 30px;
+            height: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5em;
+            font-family: 'Nanum Myeongjo', serif;
+        }
+        .clue:hover {
+            transform: scale(1.2);
+            background-color: rgba(255, 255, 0, 0.5);
+        }
+        .clue.solved {
+            border-color: #2ecc71;
+            border-style: solid;
+            background-color: rgba(46, 204, 113, 0.5);
+            cursor: not-allowed;
+        }
+
+        /* --- UI 요소 --- */
+        .game-ui {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            background-color: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 10px;
+        }
+        #clue-tracker h3, #door h3 { margin: 0 0 10px 0; font-family: 'Nanum Myeongjo', serif; }
+        #code-display {
+            font-size: 2em;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 8px;
+            color: #f1c40f;
+            background: #2c3e50;
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+        #code-input {
+            width: 150px;
+            padding: 10px;
+            font-size: 1.8em;
+            text-align: center;
+            border: 2px solid #f1c40f;
+            border-radius: 5px;
+        }
+        #unlock-button {
+            padding: 12px 20px;
+            font-size: 1.1em;
+            cursor: pointer;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        #room-title {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Nanum Myeongjo', serif;
+            font-size: 2.5em;
+            color: white;
+            text-shadow: 3px 3px 6px black;
+            background-color: rgba(0,0,0,0.4);
+            padding: 5px 20px;
+            border-radius: 10px;
+        }
+
+        /* --- 모달 (팝업창) --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.85);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: #ecf0f1;
+            color: #2c3e50;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            width: 500px;
+        }
+        #question-text { font-size: 1.4em; margin-bottom: 20px; }
+        #answer-input { width: 80%; padding: 10px; font-size: 1.2em; margin-bottom: 20px; }
+        #submit-answer { padding: 10px 20px; font-size: 1.1em; cursor: pointer; }
+        #feedback-text { margin-top: 15px; font-size: 1.1em; min-height: 20px; font-weight: bold; }
+
+        /* --- 게임 오버 화면 --- */
+        #game-over-screen { display: none; }
+        #game-over-screen h1 { font-size: 4em; color: #e74c3c; }
+        #restart-button { background: #3498db; color: white; padding: 15px 30px; font-size: 1.2em; cursor: pointer; border: none; border-radius: 5px; }
+
+        /* --- 승리 화면 (인증서) --- */
+        .certificate {
+            width: 800px;
+            height: 550px;
+            border: 10px solid #c0a16b;
+            background: #fdf5e6;
+            color: #3a2a1d;
+            padding: 50px;
+            box-sizing: border-box;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .certificate h1 { font-family: 'Nanum Myeongjo', serif; font-size: 3.5em; color: #c0a16b; margin: 0; }
+        .certificate h2 { font-size: 2em; margin: 20px 0; }
+        .certificate p { font-size: 1.2em; line-height: 1.8; }
+        #user-info-display, #clear-time-display { font-weight: bold; font-size: 1.4em; color: #d35400; }
     </style>
 </head>
 <body>
-    <div id="game-container">
-        <canvas id="game-canvas"></canvas>
-    </div>
-    <div id="crosshair"></div>
-    <div id="hud">
-        <div id="stamina-bar"><div id="stamina-fill"></div></div>
-        <div id="objective-text">ID 카드: 0 / 3</div>
+
+    <!-- 시작 전 정보 입력 화면 -->
+    <div id="login-screen" class="screen">
+        <div class="login-box">
+            <h1>동물 구출 대작전!</h1>
+            <p>갇힌 동물들을 구하기 위해, 당신의 정보가 필요합니다.</p>
+            <input type="text" id="user-name" placeholder="이름">
+            <input type="text" id="user-class" placeholder="반 (예: 햇님반)">
+            <input type="number" id="user-number" placeholder="번호">
+            <button id="start-button">게임 시작</button>
+        </div>
     </div>
 
-    <div id="start-screen" class="overlay">
-        <h1>Project: ECHO</h1>
-        <p>당신은 조난 신호를 받고 '타르타로스' 기지에 도착했습니다. 3개의 ID 카드를 찾아 탈출하십시오.<br>
-        이동: WASD / 달리기: SHIFT / 시점: 마우스<br>
-        경고: 기지 내의 '에코'는 당신의 소리를 듣고 추격합니다.</p>
-        <button id="start-button">진입</button>
-    </div>
-    <div id="end-screen" class="overlay" style="display: none;">
-        <h1 id="end-title"></h1>
-        <button id="restart-button">재시도</button>
-    </div>
-    <div id="jumpscare-screen" class="overlay">
-        <!-- 
-            ==================================================================
-            ★★★ 여기에 당신의 '점프스케어' 이미지 주소를 넣으세요! ★★★
-            ==================================================================
-        -->
-        <img id="jumpscare-image" src="https://i.ibb.co/k6KBhB3K/755.png" alt="jumpscare">
+    <!-- 메인 게임 화면 -->
+    <div id="game-screen" class="screen">
+        <div class="game-container">
+            <h2 id="room-title"></h2>
+            <div id="clue-container"></div>
+            <div class="game-ui">
+                <div id="clue-tracker">
+                    <h3>획득한 암호</h3>
+                    <div id="code-display"></div>
+                </div>
+                <div id="door">
+                    <h3>구출 암호</h3>
+                    <input type="text" id="code-input">
+                </div>
+                <button id="unlock-button">동물 구출!</button>
+            </div>
+        </div>
     </div>
 
-    <!-- 오디오 -->
-    <audio id="sfx-ambient" src="https://www.myinstants.com/media/sounds/sci-fi-drone-01.mp3" loop></audio>
-    <audio id="sfx-walk" src="https://www.myinstants.com/media/sounds/footsteps_2.mp3" loop></audio>
-    <audio id="sfx-sprint" src="https://www.myinstants.com/media/sounds/fast-breathing-sound-effect.mp3" loop></audio>
-    <audio id="sfx-monster" src="https://www.myinstants.com/media/sounds/deep-bass-rumble-sound-effect.mp3" loop></audio>
-    <audio id="sfx-pickup" src="https://www.myinstants.com/media/sounds/sci-fi-bleep.mp3"></audio>
-    <audio id="sfx-caught" src="https://www.myinstants.com/media/sounds/fnaf-2-scream.mp3"></audio>
+    <!-- 문제 풀이 모달 -->
+    <div id="puzzle-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 id="question-text"></h2>
+            <input type="text" id="answer-input" placeholder="정답을 입력하세요">
+            <button id="submit-answer">제출</button>
+            <p id="feedback-text"></p>
+        </div>
+    </div>
+
+    <!-- 게임 오버 모달 -->
+    <div id="game-over-screen" class="modal-overlay">
+        <div class="modal-content">
+            <h1>실패</h1>
+            <p>동물 구출에 실패했습니다...<br>처음부터 다시 도전해야 합니다.</p>
+            <button id="restart-button">다시 시작</button>
+        </div>
+    </div>
+
+    <!-- 최종 승리 화면 -->
+    <div id="victory-screen" class="screen">
+        <div class="certificate">
+            <h1>구출 성공 인증서</h1>
+            <p>위 어린이는 뛰어난 관찰력과 지혜로<br>위험에 처한 모든 동물들을 구출하였기에<br>이 인증서를 수여합니다.</p>
+            <h2 id="user-info-display"></h2>
+            <p>총 구출 시간</p>
+            <h2 id="clear-time-display"></h2>
+            <p><strong>- 동물 보호 협회 -</strong></p>
+        </div>
+    </div>
 
     <script>
-        const dom = {
-            canvas: document.getElementById('game-canvas'),
-            staminaFill: document.getElementById('stamina-fill'),
-            objectiveText: document.getElementById('objective-text'),
-            startScreen: document.getElementById('start-screen'),
-            endScreen: document.getElementById('end-screen'),
-            jumpscareScreen: document.getElementById('jumpscare-screen'),
-        };
-        const sfx = {
-            ambient: document.getElementById('sfx-ambient'), walk: document.getElementById('sfx-walk'),
-            sprint: document.getElementById('sfx-sprint'), monster: document.getElementById('sfx-monster'),
-            pickup: document.getElementById('sfx-pickup'), caught: document.getElementById('sfx-caught'),
-        };
-        const ctx = dom.canvas.getContext('2d');
-        dom.canvas.width = window.innerWidth; dom.canvas.height = window.innerHeight;
+        // --- 게임 데이터 ---
+        const STAGES = [
+            {
+                name: "정글의 방",
+                backgroundImage: "url('https://i.ibb.co/TxGPhBP2/Whisk-storyboarda80758d9d80d44188e763839.jpg')",
+                finalCode: "816",
+                puzzles: [
+                    { id: 'jungle-1', pos: { top: '45%', left: '20%' }, question: "몸집이 거대하고 코를 많이 쓰는 동물은?", answer: "코끼리", codePart: "8" },
+                    { id: 'jungle-2', pos: { top: '60%', left: '75%' }, question: "목이 길어 높은 곳의 나뭇잎을 먹는 동물은?", answer: "기린", codePart: "1" },
+                    { id: 'jungle-3', pos: { top: '25%', left: '50%' }, question: "알록달록한 깃털을 갖고 말을 따라하는 새는?", answer: "앵무새", codePart: "6" }
+                ]
+            },
+            {
+                name: "사막의 방",
+                backgroundImage: "url('https://i.ibb.co/6c3zF9fx/Whisk-6b23549bea.jpg)",
+                finalCode: "294",
+                puzzles: [
+                    { id: 'desert-1', pos: { top: '70%', left: '25%' }, question: "등에 혹이 두 개 있고 그걸 배로 쓰는 동물은?", answer: "낙타", codePart: "2" },
+                    { id: 'desert-2', pos: { top: '50%', left: '80%' }, question: "귀가 아주 크고 깡충깡충 뛰는 여우는?", answer: "사막여우", codePart: "9" },
+                    { id: 'desert-3', pos: { top: '20%', left: '40%' }, question: "꼬리 끝의 방울을 흔들어 소리를 내는 뱀은?", answer: "방울뱀", codePart: "4" }
+                ]
+            },
+            {
+                name: "바다의 방",
+                backgroundImage: "url('https://i.ibb.co/G4qrPnmj/Whisk-d4cfa4aa09.jpg')",
+                finalCode: "537",
+                puzzles: [
+                    { id: 'ocean-1', pos: { top: '30%', left: '15%' }, question: "지구상에서 가장 큰 동물이며 바다에 사는 포유류는?", answer: "고래", codePart: "5" },
+                    { id: 'ocean-2', pos: { top: '50%', left: '50%' }, question: "다리가 8개이고 먹물을 쏘는 동물은?", answer: "문어", codePart: "3" },
+                    { id: 'ocean-3', pos: { top: '40%', left: '85%' }, question: "몸에서 전기를 만들어내는 뱀처럼 생긴 물고기는?", answer: "뱀장어", codePart: "7" }
+                ]
+            },
+            {
+                name: "하늘의 방",
+                backgroundImage: "url('https://i.ibb.co/3mbdwfjh/Whisk-9dbbecc4a1.jpg')",
+                finalCode: "150",
+                puzzles: [
+                    { id: 'sky-1', pos: { top: '20%', left: '25%' }, question: "미국의 상징이며, 머리가 흰 아주 큰 새는?", answer: "흰머리수리", codePart: "1" },
+                    { id: 'sky-2', pos: { top: '65%', left: '15%' }, question: "화려한 꼬리 깃털을 부채처럼 펼치는 새는?", answer: "공작새", codePart: "5" },
+                    { id: 'sky-3', pos: { top: '50%', left: '70%' }, question: "날지 못하는 새 중에서 가장 크고 달리기가 빠른 새는?", answer: "타조", codePart: "0" }
+                ]
+            }
+        ];
 
-        // ★★★ 여기에 당신의 '괴물' 이미지 주소를 넣으세요! ★★★
-        const monsterImage = new Image(); monsterImage.src = 'https://i.ibb.co/jPkvWzDn/iyl5-V2-Gf-DHIkbg6-Ht-Ouv-HO3-FF1-Ii-LZ5pdv-BCAva-WGz-MLWSWAf-WPZo-Oij-Ux-b2-Dul-CLr-MA-D75pmg25-RZB.webp';
+        // --- 게임 상태 변수 ---
+        let currentUser = {};
+        let currentStageIndex = 0;
+        let stageState = {};
+        let startTime;
 
-        const MAP_SIZE = 20; const TILE_SIZE = 100;
-        let state = {};
-
-        function init() {
-            state = {
-                isGameOver: false, isGameStarted: false,
-                player: { x: 1.5, y: 1.5, angle: 0, speed: 0.04, stamina: 100 },
-                monster: { x: MAP_SIZE - 1.5, y: MAP_SIZE - 1.5, speed: 0.035, state: 'PATROL', target: null },
-                items: [],
-                itemsFound: 0,
-                map: generateMaze(MAP_SIZE, MAP_SIZE),
-                gameLoopId: null,
-                keysPressed: {},
-            };
-            
-            placeObjects('item', 3);
-            
-            Object.values(sfx).forEach(s => { s.pause(); s.currentTime = 0; });
-            sfx.ambient.volume = 0.2; sfx.walk.volume = 0.4;
-            sfx.sprint.volume = 0.6; sfx.monster.volume = 0;
-
-            dom.startScreen.style.display = 'flex';
-            dom.endScreen.style.display = 'none';
-            dom.jumpscareScreen.style.display = 'none';
-            
-            updateHUD();
-            if (state.gameLoopId) cancelAnimationFrame(state.gameLoopId);
-            gameLoop();
-        }
+        // --- DOM 요소 ---
+        const loginScreen = document.getElementById('login-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const victoryScreen = document.getElementById('victory-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const puzzleModal = document.getElementById('puzzle-modal');
+        
+        const gameContainer = document.querySelector('.game-container');
+        const roomTitle = document.getElementById('room-title');
+        const clueContainer = document.getElementById('clue-container');
+        const codeDisplay = document.getElementById('code-display');
+        const codeInput = document.getElementById('code-input');
+        
+        // --- 게임 로직 함수 ---
 
         function startGame() {
-            state.isGameStarted = true;
-            dom.startScreen.style.display = 'none';
-            document.body.requestPointerLock();
-            sfx.ambient.play();
-            sfx.monster.play();
-            setInterval(monsterAI, 2000);
-        }
+            const name = document.getElementById('user-name').value;
+            const userClass = document.getElementById('user-class').value;
+            const number = document.getElementById('user-number').value;
 
-        function generateMaze(w, h) {
-            const map = Array(h).fill(null).map(() => Array(w).fill(1));
-            const stack = [[1, 1]]; map[1][1] = 0;
-            while (stack.length > 0) {
-                const [y, x] = stack[stack.length - 1];
-                const neighbors = [];
-                [[0, -2], [0, 2], [-2, 0], [2, 0]].forEach(([dy, dx]) => {
-                    const ny = y + dy, nx = x + dx;
-                    if (ny > 0 && ny < h - 1 && nx > 0 && nx < w - 1 && map[ny][nx] === 1) {
-                        neighbors.push([ny, nx, y + dy / 2, x + dx / 2]);
-                    }
-                });
-                if (neighbors.length > 0) {
-                    const [ny, nx, wy, wx] = neighbors[Math.floor(Math.random() * neighbors.length)];
-                    map[ny][nx] = 0; map[wy][wx] = 0; stack.push([ny, nx]);
-                } else { stack.pop(); }
+            if (!name || !userClass || !number) {
+                alert("이름, 학년, 반를 모두 입력해주세요!");
+                return;
             }
-            map[1][0] = 0; // Exit
-            return map;
-        }
 
-        function placeObjects(type, count) {
-            for (let i = 0; i < count; i++) {
-                let x, y;
-                do { x = Math.floor(Math.random() * MAP_SIZE); y = Math.floor(Math.random() * MAP_SIZE); }
-                while (state.map[y][x] !== 0 || (x === 1 && y === 1));
-                state.items.push({ x: x + 0.5, y: y + 0.5 });
-            }
-        }
-
-        window.addEventListener('keydown', e => { state.keysPressed[e.key.toLowerCase()] = true; });
-        window.addEventListener('keyup', e => { state.keysPressed[e.key.toLowerCase()] = false; });
-        document.addEventListener('pointerlockchange', () => {
-            if (document.pointerLockElement !== document.body) {
-                // Game paused logic can be added here
-            }
-        });
-        document.addEventListener('mousemove', e => {
-            if (document.pointerLockElement === document.body) {
-                state.player.angle += e.movementX * 0.002;
-            }
-        });
-
-        function gameLoop() {
-            if (state.isGameOver) return;
-            if (state.isGameStarted) handleInput();
-            draw();
-            state.gameLoopId = requestAnimationFrame(gameLoop);
-        }
-
-        function handleInput() {
-            const keys = state.keysPressed;
-            const isSprinting = keys['shift'] && state.player.stamina > 0;
-            const currentSpeed = state.player.speed * (isSprinting ? 1.8 : 1);
-            let dx = 0, dy = 0;
-
-            if (keys['w'] || keys['arrowup']) { dx += Math.cos(state.player.angle) * currentSpeed; dy += Math.sin(state.player.angle) * currentSpeed; }
-            if (keys['s'] || keys['arrowdown']) { dx -= Math.cos(state.player.angle) * currentSpeed; dy -= Math.sin(state.player.angle) * currentSpeed; }
-            if (keys['a']) { dx += Math.cos(state.player.angle - Math.PI/2) * currentSpeed; dy += Math.sin(state.player.angle - Math.PI/2) * currentSpeed; }
-            if (keys['d']) { dx += Math.cos(state.player.angle + Math.PI/2) * currentSpeed; dy += Math.sin(state.player.angle + Math.PI/2) * currentSpeed; }
-
-            if (dx !== 0 || dy !== 0) {
-                const newX = state.player.x + dx;
-                const newY = state.player.y + dy;
-                if (state.map[Math.floor(newY)][Math.floor(newX)] === 0) {
-                    state.player.x = newX; state.player.y = newY;
-                }
-                if (isSprinting) {
-                    state.player.stamina = Math.max(0, state.player.stamina - 0.5);
-                    if (sfx.sprint.paused) { sfx.sprint.play(); sfx.walk.pause(); }
-                    if (Math.random() < 0.1) state.monster.target = { x: state.player.x, y: state.player.y };
-                } else {
-                    if (sfx.walk.paused) { sfx.walk.play(); sfx.sprint.pause(); }
-                    if (Math.random() < 0.02) state.monster.target = { x: state.player.x, y: state.player.y };
-                }
-            } else {
-                sfx.walk.pause(); sfx.sprint.pause();
-                state.player.stamina = Math.min(100, state.player.stamina + 0.1);
-            }
+            currentUser = { name, userClass, number };
+            startTime = new Date();
             
-            // Pickup
-            state.items = state.items.filter(item => {
-                if (Math.hypot(item.x - state.player.x, item.y - state.player.y) < 0.5) {
-                    state.itemsFound++; sfx.pickup.play(); return false;
-                } return true;
+            loginScreen.style.display = 'none';
+            gameScreen.style.display = 'flex';
+            
+            loadStage(0);
+        }
+
+        function loadStage(stageIndex) {
+            currentStageIndex = stageIndex;
+            const stageData = STAGES[stageIndex];
+
+            // 스테이지 상태 초기화
+            stageState = {
+                solvedPuzzles: [],
+                revealedCode: Array(stageData.finalCode.length).fill("_"),
+                activePuzzle: null,
+                attemptsLeft: 2
+            };
+
+            // UI 업데이트
+            gameContainer.style.backgroundImage = stageData.backgroundImage;
+            roomTitle.textContent = stageData.name;
+            codeDisplay.textContent = stageState.revealedCode.join(" ");
+            codeInput.value = "";
+            codeInput.maxLength = stageData.finalCode.length;
+
+            // 단서 생성
+            clueContainer.innerHTML = ""; // 이전 단서 삭제
+            stageData.puzzles.forEach(puzzle => {
+                const clueEl = document.createElement('div');
+                clueEl.className = 'clue';
+                clueEl.id = puzzle.id;
+                clueEl.style.top = puzzle.pos.top;
+                clueEl.style.left = puzzle.pos.left;
+                clueEl.textContent = "?";
+                clueEl.addEventListener('click', () => showPuzzle(puzzle));
+                clueContainer.appendChild(clueEl);
             });
-
-            updateHUD();
-            checkEndCondition();
         }
 
-        function monsterAI() {
-            if (state.isGameOver) return;
-            if (state.monster.state === 'PATROL' && !state.monster.target) {
-                let x, y;
-                do { x = Math.floor(Math.random() * MAP_SIZE); y = Math.floor(Math.random() * MAP_SIZE); }
-                while (state.map[y][x] !== 0);
-                state.monster.target = { x: x + 0.5, y: y + 0.5 };
-            }
-            if (state.monster.target) {
-                const mdx = state.monster.target.x - state.monster.x;
-                const mdy = state.monster.target.y - state.monster.y;
-                const mDist = Math.hypot(mdx, mdy);
-                if (mDist > 0.5) {
-                    state.monster.x += (mdx / mDist) * state.monster.speed;
-                    state.monster.y += (mdy / mDist) * state.monster.speed;
-                } else {
-                    state.monster.target = null;
-                }
-            }
+        function showPuzzle(puzzle) {
+            if (stageState.solvedPuzzles.includes(puzzle.id)) return;
+
+            stageState.activePuzzle = puzzle;
+            stageState.attemptsLeft = 2;
+
+            document.getElementById('question-text').textContent = puzzle.question;
+            document.getElementById('answer-input').value = "";
+            document.getElementById('feedback-text').textContent = `남은 기회: ${stageState.attemptsLeft}번`;
+            document.getElementById('feedback-text').style.color = '#2c3e50';
+            
+            puzzleModal.style.display = 'flex';
+            document.getElementById('answer-input').focus();
         }
 
-        function draw() {
-            const screenW = dom.canvas.width;
-            const screenH = dom.canvas.height;
-            ctx.fillStyle = '#111';
-            ctx.fillRect(0, 0, screenW, screenH);
+        function checkAnswer() {
+            const userAnswer = document.getElementById('answer-input').value.trim();
+            const correctAnswer = stageState.activePuzzle.answer;
 
-            for (let x = 0; x < screenW; x++) {
-                const rayAngle = state.player.angle - (Math.PI / 4) + (x / screenW) * (Math.PI / 2);
-                let distToWall = 0;
-                let hitWall = false;
-                const stepX = Math.cos(rayAngle);
-                const stepY = Math.sin(rayAngle);
-
-                while (!hitWall && distToWall < 20) {
-                    distToWall += 0.1;
-                    const testX = Math.floor(state.player.x + stepX * distToWall);
-                    const testY = Math.floor(state.player.y + stepY * distToWall);
-                    if (testX < 0 || testX >= MAP_SIZE || testY < 0 || testY >= MAP_SIZE) {
-                        hitWall = true; distToWall = 20;
-                    } else if (state.map[testY][testX] === 1) {
-                        hitWall = true;
-                    }
-                }
-                const ceiling = screenH / 2 - screenH / distToWall;
-                const floor = screenH - ceiling;
-                const shade = Math.max(0.1, 1 - distToWall / 10);
-                ctx.fillStyle = `rgb(${15*shade}, ${15*shade}, ${25*shade})`;
-                ctx.fillRect(x, 0, 1, ceiling);
-                ctx.fillStyle = `rgb(${50*shade}, ${50*shade}, ${50*shade})`;
-                ctx.fillRect(x, floor, 1, screenH - floor);
-                ctx.fillStyle = `rgb(${30*shade}, ${30*shade}, ${40*shade})`;
-                ctx.fillRect(x, ceiling, 1, floor - ceiling);
-            }
-            
-            // Draw Sprites
-            const sprites = [...state.items, state.monster];
-            sprites.sort((a, b) => Math.hypot(b.x - state.player.x, b.y - state.player.y) - Math.hypot(a.x - state.player.x, a.y - state.player.y));
-            
-            sprites.forEach(sprite => {
-                const dx = sprite.x - state.player.x;
-                const dy = sprite.y - state.player.y;
-                const dist = Math.hypot(dx, dy);
-                const spriteAngle = Math.atan2(dy, dx) - state.player.angle;
+            if (userAnswer === correctAnswer) {
+                // 정답 처리
+                document.getElementById('feedback-text').textContent = `정답! 암호 조각 [${stageState.activePuzzle.codePart}]을(를) 획득했습니다.`;
+                document.getElementById('feedback-text').style.color = '#27ae60';
                 
-                if (Math.abs(spriteAngle) < Math.PI / 3) {
-                    const spriteScreenX = Math.tan(spriteAngle) * screenW + screenW / 2;
-                    const spriteSize = screenH / dist;
-                    const img = sprite === state.monster ? monsterImage : null; // Item images can be added here
-                    if (img) {
-                        ctx.drawImage(img, spriteScreenX - spriteSize / 2, screenH / 2 - spriteSize / 2, spriteSize, spriteSize);
-                    } else { // Fallback for items
-                        ctx.fillStyle = '#f1c40f';
-                        ctx.fillRect(spriteScreenX - spriteSize / 4, screenH / 2 - spriteSize / 4, spriteSize/2, spriteSize/2);
-                    }
-                }
-            });
-        }
-        
-        function updateHUD() {
-            dom.staminaFill.style.width = `${state.player.stamina}%`;
-            dom.objectiveText.textContent = `ID 카드: ${state.itemsFound} / 3`;
-            const distToMonster = Math.hypot(state.player.x - state.monster.x, state.player.y - state.monster.y);
-            sfx.monster.volume = Math.max(0, 1 - (distToMonster / 15)) * 0.7;
-        }
+                stageState.solvedPuzzles.push(stageState.activePuzzle.id);
+                document.getElementById(stageState.activePuzzle.id).classList.add('solved');
+                
+                const puzzleIndex = STAGES[currentStageIndex].puzzles.findIndex(p => p.id === stageState.activePuzzle.id);
+                stageState.revealedCode[puzzleIndex] = stageState.activePuzzle.codePart;
+                codeDisplay.textContent = stageState.revealedCode.join(" ");
 
-        function checkEndCondition() {
-            if (Math.hypot(state.player.x - state.monster.x, state.player.y - state.monster.y) < 0.8) endGame(false);
-            if (Math.floor(state.player.x) === 0 && Math.floor(state.player.y) === 1 && state.itemsFound >= 3) endGame(true);
-        }
-
-        function endGame(isWin) {
-            if (state.isGameOver) return;
-            state.isGameOver = true;
-            state.isGameStarted = false;
-            cancelAnimationFrame(state.gameLoopId);
-            Object.values(sfx).forEach(s => s.pause());
-            document.exitPointerLock();
-
-            if (isWin) {
-                dom.endScreen.querySelector('#end-title').textContent = "탈출 성공";
-                dom.endScreen.style.display = 'flex';
+                setTimeout(() => puzzleModal.style.display = 'none', 2000);
             } else {
-                sfx.caught.play();
-                dom.jumpscareScreen.style.display = 'flex';
-                setTimeout(() => {
-                    dom.jumpscareScreen.style.display = 'none';
-                    dom.endScreen.querySelector('#end-title').textContent = "사망";
-                    dom.endScreen.style.display = 'flex';
-                }, 2000);
+                // 오답 처리
+                stageState.attemptsLeft--;
+                if (stageState.attemptsLeft > 0) {
+                    document.getElementById('feedback-text').textContent = `오답입니다. 남은 기회: ${stageState.attemptsLeft}번`;
+                    document.getElementById('feedback-text').style.color = '#e67e22';
+                } else {
+                    document.getElementById('feedback-text').textContent = `실패! 기회를 모두 사용했습니다.`;
+                    document.getElementById('feedback-text').style.color = '#e74c3c';
+                    setTimeout(() => {
+                        puzzleModal.style.display = 'none';
+                        gameOver();
+                    }, 1500);
+                }
             }
         }
 
-        dom.startScreen.addEventListener('click', startGame);
-        dom.endScreen.addEventListener('click', init);
-        init();
+        function checkFinalCode() {
+            const stageData = STAGES[currentStageIndex];
+            if (codeInput.value === stageData.finalCode) {
+                // 스테이지 클리어
+                if (currentStageIndex < STAGES.length - 1) {
+                    // 다음 스테이지로
+                    alert(`${stageData.name} 구출 성공! 다음 장소로 이동합니다.`);
+                    loadStage(currentStageIndex + 1);
+                } else {
+                    // 최종 승리
+                    showVictory();
+                }
+            } else {
+                // 암호 틀림
+                alert("암호가 틀렸습니다! 동물들이 더 위험해집니다...");
+                gameOver();
+            }
+        }
+
+        function gameOver() {
+            gameOverScreen.style.display = 'flex';
+        }
+
+        function showVictory() {
+            const endTime = new Date();
+            const timeDiff = Math.round((endTime - startTime) / 1000); // 초 단위
+            const minutes = Math.floor(timeDiff / 60);
+            const seconds = timeDiff % 60;
+
+            document.getElementById('user-info-display').textContent = `${currentUser.userClass}반 ${currentUser.number}번 ${currentUser.name}`;
+            document.getElementById('clear-time-display').textContent = `${minutes}분 ${seconds}초`;
+
+            gameScreen.style.display = 'none';
+            victoryScreen.style.display = 'flex';
+        }
+
+        // --- 이벤트 리스너 연결 ---
+        document.getElementById('start-button').addEventListener('click', startGame);
+        document.getElementById('submit-answer').addEventListener('click', checkAnswer);
+        document.getElementById('answer-input').addEventListener('keyup', e => e.key === 'Enter' && checkAnswer());
+        document.getElementById('unlock-button').addEventListener('click', checkFinalCode);
+        document.getElementById('code-input').addEventListener('keyup', e => e.key === 'Enter' && checkFinalCode());
+        document.getElementById('restart-button').addEventListener('click', () => location.reload());
+
     </script>
 </body>
-</html>
+</html>```
