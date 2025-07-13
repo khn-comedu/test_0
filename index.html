@@ -1,17 +1,340 @@
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <link href="style.css" rel="stylesheet" type="text/css" />
-    <title>.</title>
-  </head>
-  <body>
-    <button onclick="magic(event)">yes</button>
-    <button onclick="error(event)">no</button>
-   choose one!
-    <script src="script.js"></script>>
-     
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project: ECHO</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Nanum+Gothic+Coding&display=swap');
+        body { margin: 0; background-color: #000; font-family: 'Nanum Gothic Coding', monospace; overflow: hidden; cursor: none; }
+        #game-container { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        canvas { display: block; }
+        #crosshair {
+            position: fixed; top: 50%; left: 50%; width: 4px; height: 4px;
+            background: white; border-radius: 50%; transform: translate(-50%, -50%);
+            mix-blend-mode: difference; z-index: 10;
+        }
+        #hud {
+            position: fixed; bottom: 20px; left: 20px; color: #fff;
+            background: rgba(0,0,0,0.5); padding: 15px; border-radius: 5px; z-index: 10;
+        }
+        #stamina-bar { width: 250px; height: 25px; background: #555; border: 1px solid #888; }
+        #stamina-fill { width: 100%; height: 100%; background: #2ecc71; transition: width 0.2s; }
+        #objective-text { margin-top: 10px; font-size: 1.5em; }
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); color: white; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; text-align: center; z-index: 20; cursor: default;
+        }
+        .overlay h1 { font-family: 'Orbitron', sans-serif; font-size: 4em; }
+        #jumpscare-screen { display: none; background-size: cover; background-position: center; }
+        #jumpscare-image { width: 100%; height: 100%; object-fit: cover; }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+    </div>
+    <div id="crosshair"></div>
+    <div id="hud">
+        <div id="stamina-bar"><div id="stamina-fill"></div></div>
+        <div id="objective-text">ID 카드: 0 / 3</div>
+    </div>
 
+    <div id="start-screen" class="overlay">
+        <h1>Project: ECHO</h1>
+        <p>당신은 조난 신호를 받고 '타르타로스' 기지에 도착했습니다. 3개의 ID 카드를 찾아 탈출하십시오.<br>
+        이동: WASD / 달리기: SHIFT / 시점: 마우스<br>
+        경고: 기지 내의 '에코'는 당신의 소리를 듣고 추격합니다.</p>
+        <button id="start-button">진입</button>
+    </div>
+    <div id="end-screen" class="overlay" style="display: none;">
+        <h1 id="end-title"></h1>
+        <button id="restart-button">재시도</button>
+    </div>
+    <div id="jumpscare-screen" class="overlay">
+        <!-- 
+            ==================================================================
+            ★★★ 여기에 당신의 '점프스케어' 이미지 주소를 넣으세요! ★★★
+            ==================================================================
+        -->
+        <img id="jumpscare-image" src="https://i.ibb.co/k6KBhB3K/755.png" alt="jumpscare">
+    </div>
+
+    <!-- 오디오 -->
+    <audio id="sfx-ambient" src="https://www.myinstants.com/media/sounds/sci-fi-drone-01.mp3" loop></audio>
+    <audio id="sfx-walk" src="https://www.myinstants.com/media/sounds/footsteps_2.mp3" loop></audio>
+    <audio id="sfx-sprint" src="https://www.myinstants.com/media/sounds/fast-breathing-sound-effect.mp3" loop></audio>
+    <audio id="sfx-monster" src="https://www.myinstants.com/media/sounds/deep-bass-rumble-sound-effect.mp3" loop></audio>
+    <audio id="sfx-pickup" src="https://www.myinstants.com/media/sounds/sci-fi-bleep.mp3"></audio>
+    <audio id="sfx-caught" src="https://www.myinstants.com/media/sounds/fnaf-2-scream.mp3"></audio>
+
+    <script>
+        const dom = {
+            canvas: document.getElementById('game-canvas'),
+            staminaFill: document.getElementById('stamina-fill'),
+            objectiveText: document.getElementById('objective-text'),
+            startScreen: document.getElementById('start-screen'),
+            endScreen: document.getElementById('end-screen'),
+            jumpscareScreen: document.getElementById('jumpscare-screen'),
+        };
+        const sfx = {
+            ambient: document.getElementById('sfx-ambient'), walk: document.getElementById('sfx-walk'),
+            sprint: document.getElementById('sfx-sprint'), monster: document.getElementById('sfx-monster'),
+            pickup: document.getElementById('sfx-pickup'), caught: document.getElementById('sfx-caught'),
+        };
+        const ctx = dom.canvas.getContext('2d');
+        dom.canvas.width = window.innerWidth; dom.canvas.height = window.innerHeight;
+
+        // ★★★ 여기에 당신의 '괴물' 이미지 주소를 넣으세요! ★★★
+        const monsterImage = new Image(); monsterImage.src = 'https://i.ibb.co/jPkvWzDn/iyl5-V2-Gf-DHIkbg6-Ht-Ouv-HO3-FF1-Ii-LZ5pdv-BCAva-WGz-MLWSWAf-WPZo-Oij-Ux-b2-Dul-CLr-MA-D75pmg25-RZB.webp';
+
+        const MAP_SIZE = 20; const TILE_SIZE = 100;
+        let state = {};
+
+        function init() {
+            state = {
+                isGameOver: false, isGameStarted: false,
+                player: { x: 1.5, y: 1.5, angle: 0, speed: 0.04, stamina: 100 },
+                monster: { x: MAP_SIZE - 1.5, y: MAP_SIZE - 1.5, speed: 0.035, state: 'PATROL', target: null },
+                items: [],
+                itemsFound: 0,
+                map: generateMaze(MAP_SIZE, MAP_SIZE),
+                gameLoopId: null,
+                keysPressed: {},
+            };
+            
+            placeObjects('item', 3);
+            
+            Object.values(sfx).forEach(s => { s.pause(); s.currentTime = 0; });
+            sfx.ambient.volume = 0.2; sfx.walk.volume = 0.4;
+            sfx.sprint.volume = 0.6; sfx.monster.volume = 0;
+
+            dom.startScreen.style.display = 'flex';
+            dom.endScreen.style.display = 'none';
+            dom.jumpscareScreen.style.display = 'none';
+            
+            updateHUD();
+            if (state.gameLoopId) cancelAnimationFrame(state.gameLoopId);
+            gameLoop();
+        }
+
+        function startGame() {
+            state.isGameStarted = true;
+            dom.startScreen.style.display = 'none';
+            document.body.requestPointerLock();
+            sfx.ambient.play();
+            sfx.monster.play();
+            setInterval(monsterAI, 2000);
+        }
+
+        function generateMaze(w, h) {
+            const map = Array(h).fill(null).map(() => Array(w).fill(1));
+            const stack = [[1, 1]]; map[1][1] = 0;
+            while (stack.length > 0) {
+                const [y, x] = stack[stack.length - 1];
+                const neighbors = [];
+                [[0, -2], [0, 2], [-2, 0], [2, 0]].forEach(([dy, dx]) => {
+                    const ny = y + dy, nx = x + dx;
+                    if (ny > 0 && ny < h - 1 && nx > 0 && nx < w - 1 && map[ny][nx] === 1) {
+                        neighbors.push([ny, nx, y + dy / 2, x + dx / 2]);
+                    }
+                });
+                if (neighbors.length > 0) {
+                    const [ny, nx, wy, wx] = neighbors[Math.floor(Math.random() * neighbors.length)];
+                    map[ny][nx] = 0; map[wy][wx] = 0; stack.push([ny, nx]);
+                } else { stack.pop(); }
+            }
+            map[1][0] = 0; // Exit
+            return map;
+        }
+
+        function placeObjects(type, count) {
+            for (let i = 0; i < count; i++) {
+                let x, y;
+                do { x = Math.floor(Math.random() * MAP_SIZE); y = Math.floor(Math.random() * MAP_SIZE); }
+                while (state.map[y][x] !== 0 || (x === 1 && y === 1));
+                state.items.push({ x: x + 0.5, y: y + 0.5 });
+            }
+        }
+
+        window.addEventListener('keydown', e => { state.keysPressed[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', e => { state.keysPressed[e.key.toLowerCase()] = false; });
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement !== document.body) {
+                // Game paused logic can be added here
+            }
+        });
+        document.addEventListener('mousemove', e => {
+            if (document.pointerLockElement === document.body) {
+                state.player.angle += e.movementX * 0.002;
+            }
+        });
+
+        function gameLoop() {
+            if (state.isGameOver) return;
+            if (state.isGameStarted) handleInput();
+            draw();
+            state.gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        function handleInput() {
+            const keys = state.keysPressed;
+            const isSprinting = keys['shift'] && state.player.stamina > 0;
+            const currentSpeed = state.player.speed * (isSprinting ? 1.8 : 1);
+            let dx = 0, dy = 0;
+
+            if (keys['w'] || keys['arrowup']) { dx += Math.cos(state.player.angle) * currentSpeed; dy += Math.sin(state.player.angle) * currentSpeed; }
+            if (keys['s'] || keys['arrowdown']) { dx -= Math.cos(state.player.angle) * currentSpeed; dy -= Math.sin(state.player.angle) * currentSpeed; }
+            if (keys['a']) { dx += Math.cos(state.player.angle - Math.PI/2) * currentSpeed; dy += Math.sin(state.player.angle - Math.PI/2) * currentSpeed; }
+            if (keys['d']) { dx += Math.cos(state.player.angle + Math.PI/2) * currentSpeed; dy += Math.sin(state.player.angle + Math.PI/2) * currentSpeed; }
+
+            if (dx !== 0 || dy !== 0) {
+                const newX = state.player.x + dx;
+                const newY = state.player.y + dy;
+                if (state.map[Math.floor(newY)][Math.floor(newX)] === 0) {
+                    state.player.x = newX; state.player.y = newY;
+                }
+                if (isSprinting) {
+                    state.player.stamina = Math.max(0, state.player.stamina - 0.5);
+                    if (sfx.sprint.paused) { sfx.sprint.play(); sfx.walk.pause(); }
+                    if (Math.random() < 0.1) state.monster.target = { x: state.player.x, y: state.player.y };
+                } else {
+                    if (sfx.walk.paused) { sfx.walk.play(); sfx.sprint.pause(); }
+                    if (Math.random() < 0.02) state.monster.target = { x: state.player.x, y: state.player.y };
+                }
+            } else {
+                sfx.walk.pause(); sfx.sprint.pause();
+                state.player.stamina = Math.min(100, state.player.stamina + 0.1);
+            }
+            
+            // Pickup
+            state.items = state.items.filter(item => {
+                if (Math.hypot(item.x - state.player.x, item.y - state.player.y) < 0.5) {
+                    state.itemsFound++; sfx.pickup.play(); return false;
+                } return true;
+            });
+
+            updateHUD();
+            checkEndCondition();
+        }
+
+        function monsterAI() {
+            if (state.isGameOver) return;
+            if (state.monster.state === 'PATROL' && !state.monster.target) {
+                let x, y;
+                do { x = Math.floor(Math.random() * MAP_SIZE); y = Math.floor(Math.random() * MAP_SIZE); }
+                while (state.map[y][x] !== 0);
+                state.monster.target = { x: x + 0.5, y: y + 0.5 };
+            }
+            if (state.monster.target) {
+                const mdx = state.monster.target.x - state.monster.x;
+                const mdy = state.monster.target.y - state.monster.y;
+                const mDist = Math.hypot(mdx, mdy);
+                if (mDist > 0.5) {
+                    state.monster.x += (mdx / mDist) * state.monster.speed;
+                    state.monster.y += (mdy / mDist) * state.monster.speed;
+                } else {
+                    state.monster.target = null;
+                }
+            }
+        }
+
+        function draw() {
+            const screenW = dom.canvas.width;
+            const screenH = dom.canvas.height;
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, screenW, screenH);
+
+            for (let x = 0; x < screenW; x++) {
+                const rayAngle = state.player.angle - (Math.PI / 4) + (x / screenW) * (Math.PI / 2);
+                let distToWall = 0;
+                let hitWall = false;
+                const stepX = Math.cos(rayAngle);
+                const stepY = Math.sin(rayAngle);
+
+                while (!hitWall && distToWall < 20) {
+                    distToWall += 0.1;
+                    const testX = Math.floor(state.player.x + stepX * distToWall);
+                    const testY = Math.floor(state.player.y + stepY * distToWall);
+                    if (testX < 0 || testX >= MAP_SIZE || testY < 0 || testY >= MAP_SIZE) {
+                        hitWall = true; distToWall = 20;
+                    } else if (state.map[testY][testX] === 1) {
+                        hitWall = true;
+                    }
+                }
+                const ceiling = screenH / 2 - screenH / distToWall;
+                const floor = screenH - ceiling;
+                const shade = Math.max(0.1, 1 - distToWall / 10);
+                ctx.fillStyle = `rgb(${15*shade}, ${15*shade}, ${25*shade})`;
+                ctx.fillRect(x, 0, 1, ceiling);
+                ctx.fillStyle = `rgb(${50*shade}, ${50*shade}, ${50*shade})`;
+                ctx.fillRect(x, floor, 1, screenH - floor);
+                ctx.fillStyle = `rgb(${30*shade}, ${30*shade}, ${40*shade})`;
+                ctx.fillRect(x, ceiling, 1, floor - ceiling);
+            }
+            
+            // Draw Sprites
+            const sprites = [...state.items, state.monster];
+            sprites.sort((a, b) => Math.hypot(b.x - state.player.x, b.y - state.player.y) - Math.hypot(a.x - state.player.x, a.y - state.player.y));
+            
+            sprites.forEach(sprite => {
+                const dx = sprite.x - state.player.x;
+                const dy = sprite.y - state.player.y;
+                const dist = Math.hypot(dx, dy);
+                const spriteAngle = Math.atan2(dy, dx) - state.player.angle;
+                
+                if (Math.abs(spriteAngle) < Math.PI / 3) {
+                    const spriteScreenX = Math.tan(spriteAngle) * screenW + screenW / 2;
+                    const spriteSize = screenH / dist;
+                    const img = sprite === state.monster ? monsterImage : null; // Item images can be added here
+                    if (img) {
+                        ctx.drawImage(img, spriteScreenX - spriteSize / 2, screenH / 2 - spriteSize / 2, spriteSize, spriteSize);
+                    } else { // Fallback for items
+                        ctx.fillStyle = '#f1c40f';
+                        ctx.fillRect(spriteScreenX - spriteSize / 4, screenH / 2 - spriteSize / 4, spriteSize/2, spriteSize/2);
+                    }
+                }
+            });
+        }
+        
+        function updateHUD() {
+            dom.staminaFill.style.width = `${state.player.stamina}%`;
+            dom.objectiveText.textContent = `ID 카드: ${state.itemsFound} / 3`;
+            const distToMonster = Math.hypot(state.player.x - state.monster.x, state.player.y - state.monster.y);
+            sfx.monster.volume = Math.max(0, 1 - (distToMonster / 15)) * 0.7;
+        }
+
+        function checkEndCondition() {
+            if (Math.hypot(state.player.x - state.monster.x, state.player.y - state.monster.y) < 0.8) endGame(false);
+            if (Math.floor(state.player.x) === 0 && Math.floor(state.player.y) === 1 && state.itemsFound >= 3) endGame(true);
+        }
+
+        function endGame(isWin) {
+            if (state.isGameOver) return;
+            state.isGameOver = true;
+            state.isGameStarted = false;
+            cancelAnimationFrame(state.gameLoopId);
+            Object.values(sfx).forEach(s => s.pause());
+            document.exitPointerLock();
+
+            if (isWin) {
+                dom.endScreen.querySelector('#end-title').textContent = "탈출 성공";
+                dom.endScreen.style.display = 'flex';
+            } else {
+                sfx.caught.play();
+                dom.jumpscareScreen.style.display = 'flex';
+                setTimeout(() => {
+                    dom.jumpscareScreen.style.display = 'none';
+                    dom.endScreen.querySelector('#end-title').textContent = "사망";
+                    dom.endScreen.style.display = 'flex';
+                }, 2000);
+            }
+        }
+
+        dom.startScreen.addEventListener('click', startGame);
+        dom.endScreen.addEventListener('click', init);
+        init();
     </script>
-   </body>
+</body>
 </html>
